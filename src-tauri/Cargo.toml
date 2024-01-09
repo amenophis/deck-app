@@ -15,7 +15,10 @@ tauri-build = { version = "1.5", features = [] }
 [dependencies]
 tauri = { version = "1.5", features = ["shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = "1.0.101"
+streamdeck = { git = "https://github.com/amenophis/ryankurte-rust-streamdeck.git", branch = "update-hidapi", features = ["default"] }
+hidapi = "2.4"
+tokio = { version = "1.35.1", features = ["full"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

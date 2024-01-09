@@ -1,53 +1,44 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/tauri";
-import "./App.css";
+import {useQuery} from "react-query";
+import {getDecks, setButtonImage} from "./api/api.ts";
+import {useState} from "react";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [currentDeck, setCurrentDeck] = useState<string>("")
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-    setGreetMsg(await invoke("greet", { name }));
+  const { data: decks, error, isLoading } = useQuery('get_decks', getDecks);
+
+  if (isLoading) return <div>Fetching decks...</div>;
+  if (error) return <div>An error occurred: {error.message}</div>;
+
+  function SetImage()
+  {
+    setButtonImage(currentDeck, 1);
   }
 
   return (
-    <div className="container">
-      <h1>Welcome to Tauri!</h1>
+    <div>
+      <h1>Amenophis Deck App</h1>
 
-      <div className="row">
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
+      Device list:
+      {
+        <select onChange={e => setCurrentDeck(e.target.value)}>
+          <option value="">Please select a deck</option>
+          {
+            decks && decks.map(deck => (
+              <option key={deck.serial} value={deck.serial} >
+                {`${deck.serial}`}
+              </option>
+            ))
+          }
+        </select>
+      }
 
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+      { currentDeck }
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-
-      <p>{greetMsg}</p>
+      <button onClick={SetImage}>Set image</button>
     </div>
-  );
+  )
+    ;
 }
 
 export default App;
