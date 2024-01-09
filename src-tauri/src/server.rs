@@ -2,6 +2,7 @@ use hidapi::HidApi;
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::time::Duration;
+use eyre::{Context, ContextCompat, Error};
 use streamdeck::{ImageOptions};
 use tokio::sync::{mpsc, Mutex};
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -25,18 +26,18 @@ pub struct Server
 
 impl Server
 {
-    pub fn new() -> Self
+    pub fn new() -> Result<Self, Error>
     {
-        let hid_api = Arc::new(Mutex::new(HidApi::new().unwrap()));
+        let hid_api = Arc::new(Mutex::new(HidApi::new()?));
         let devices = Arc::new(Mutex::new(HashMap::<String, Device>::new()));
         let (command_sender, command_receiver): (Sender<Command>, Receiver<Command>) = mpsc::channel(32);
 
-        Self {
+        Ok(Self {
             hid_api,
             devices,
             command_receiver: Arc::new(Mutex::new(command_receiver)),
             command_sender: Arc::new(Mutex::new(command_sender)),
-        }
+        })
     }
 
     pub fn get_devices(&self) -> Arc<Mutex<HashMap<String, Device>>>
@@ -44,9 +45,12 @@ impl Server
         self.devices.clone()
     }
 
-    pub async fn execute_command(&self, c: Command)
+    pub async fn execute_command(&self, c: Command) -> Result<(), Error>
     {
-        self.command_sender.lock().await.send(c).await.unwrap();
+        Ok(self.command_sender
+            .lock().await
+            .send(c).await?
+        )
     }
 
     pub fn start(&mut self)
@@ -67,25 +71,38 @@ impl Server
                 // Look for new streamdecks
                 {
                     let mut hid_api = hid_api.lock().await;
-                    hid_api.refresh_devices().unwrap();
+                    let loaded = hid_api.refresh_devices().wrap_err("Unable to refresh devices");
+                    match loaded {
+                        Ok(_) => {
+                            let attached_streamdecks = hid_api.device_list()
+                                .filter(|streamdeck| streamdeck.vendor_id() == 0x0FD9);
 
-                    let attached_streamdecks = hid_api.device_list()
-                        .filter(|streamdeck| streamdeck.vendor_id() == 0x0FD9);
+                            for streamdeck in attached_streamdecks {
+                                let serial = streamdeck.serial_number().wrap_err("Unable to get streamdeck serial number");
+                                match serial {
+                                    Ok(serial) => {
+                                        let serial = serial.to_string();
+                                        let mut device_list = devices.lock().await;
 
-                    for streamdeck in attached_streamdecks {
-                        let serial = streamdeck.serial_number().unwrap().to_string();
-                        let mut device_list = devices.lock().await;
+                                        attached_serials.push(serial.clone());
 
-                        attached_serials.push(serial.clone());
-
-                        if let None = device_list.get(&serial) {
-                            let device = Device::new(&hid_api, streamdeck.vendor_id(), streamdeck.product_id(), serial.clone());
-                            device_list.insert(serial.clone(), device);
-
-                            println!("Attached {}", serial);
-                            // TODO: Dispatch attached event
+                                        if let None = device_list.get(&serial) {
+                                            match Device::new(&hid_api, streamdeck.vendor_id(), streamdeck.product_id(), serial.clone()) {
+                                                Ok(device) => {
+                                                    device_list.insert(serial.clone(), device);
+                                                    println!("Attached {}", serial);
+                                                    // TODO: Dispatch attached event
+                                                },
+                                                Err(e) => println!("Unable to attach streamdeck with serial {}: {}", serial, e)
+                                            }
+                                        }
+                                    }
+                                    Err(e) => println!("{}", e)
+                                }
+                            };
                         }
-                    };
+                        Err(e) =>  println!("{}", e)
+                    }
                 }
 
                 // Look for suspended streamdecks
@@ -125,13 +142,20 @@ impl Server
                     match command {
                         Command::SetButtonImage(serial, key, image) => {
                             let mut handles = devices.lock().await;
-                            let device = handles.get_mut(&serial).unwrap();
-
-                            device.streamdeck.set_button_file(key, image.as_str(), &ImageOptions::default()).expect("TODO: panic message");
+                            let device = handles.get_mut(&serial).wrap_err("Unable to get streamdeck");
+                            match device {
+                                Ok(device) => {
+                                    device.streamdeck.set_button_file(key, image.as_str(), &ImageOptions::default()).expect("TODO: panic message");
+                                }
+                                Err(e) => {
+                                    println!("{}", e);
+                                }
+                            }
                         }
                     }
                 }
             }
+
         });
     }
 }

@@ -18,9 +18,14 @@ fn main() {
                 window.open_devtools();
             }
 
-            let mut server = Server::new();
-            server.start();
-            app.manage(server);
+            let server = Server::new();
+            match server {
+                Ok(mut server) => {
+                    server.start();
+                    app.manage(server);
+                }
+                Err(e) => println!("Unable to start server: {}", e)
+            }
 
             Ok(())
         })
