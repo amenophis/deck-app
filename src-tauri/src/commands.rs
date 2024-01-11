@@ -1,5 +1,3 @@
-extern crate hidapi;
-
 use std::env;
 use eyre::Context;
 use tauri::State;
