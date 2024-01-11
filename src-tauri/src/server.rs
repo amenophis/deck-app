@@ -26,7 +26,7 @@ pub struct Server
 
 impl Server
 {
-    pub fn new() -> Result<Self, Error>
+    pub fn try_new() -> Result<Self, Error>
     {
         let hid_api = Arc::new(Mutex::new(HidApi::new()?));
         let devices = Arc::new(Mutex::new(HashMap::<String, Device>::new()));
@@ -87,7 +87,7 @@ impl Server
                                         attached_serials.push(serial.clone());
 
                                         if let None = device_list.get(&serial) {
-                                            match Device::new(&hid_api, streamdeck.vendor_id(), streamdeck.product_id(), serial.clone()) {
+                                            match Device::try_new(&hid_api, streamdeck.vendor_id(), streamdeck.product_id(), serial.clone()) {
                                                 Ok(device) => {
                                                     device_list.insert(serial.clone(), device);
                                                     println!("Attached {}", serial);

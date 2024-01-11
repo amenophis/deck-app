@@ -19,7 +19,7 @@ fn main() {
                 window.open_devtools();
             }
 
-            let server = Server::new();
+            let server = Server::try_new();
             match server {
                 Ok(mut server) => {
                     server.start();
