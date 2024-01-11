@@ -16,7 +16,7 @@ pub async fn get_decks(server: State<'_, Server>) -> Result<Vec<DeviceResponse>,
     let mut devices = Vec::new();
 
     for (serial, device) in server.get_devices().lock().await.iter_mut() {
-        let version = device.streamdeck.version().wrap_err("Unable to get streamdeck version");
+        let version = device.streamdeck.lock().await.version().wrap_err("Unable to get streamdeck version");
         match version {
             Ok(version) => {
                 devices.push(DeviceResponse {

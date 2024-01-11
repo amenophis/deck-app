@@ -8,13 +8,16 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tauri::async_runtime::spawn;
 use tokio::time::sleep;
-use crate::device::Device;
+use crate::device::{Device, Event};
 
 #[derive(serde::Deserialize)]
 pub enum Command
 {
     SetButtonImage(String, u8, String),
 }
+
+unsafe impl Send for Server {}
+unsafe impl Sync for Server {}
 
 pub struct Server
 {
@@ -89,6 +92,17 @@ impl Server
                                         if let None = device_list.get(&serial) {
                                             match Device::try_new(&hid_api, streamdeck.vendor_id(), streamdeck.product_id(), serial.clone()) {
                                                 Ok(device) => {
+                                                    device.start_button_watcher(|event| {
+                                                        match event {
+                                                            Event::KeyPressed(key) => {
+                                                                println!("[Server] KeyPressed {key}");
+                                                            }
+                                                            Event::KeyReleased(key) => {
+                                                                println!("[Server] KeyReleased {key}");
+                                                            }
+                                                        }
+                                                    });
+
                                                     device_list.insert(serial.clone(), device);
                                                     println!("Attached {}", serial);
                                                     // TODO: Dispatch attached event
@@ -145,7 +159,7 @@ impl Server
                             let device = handles.get_mut(&serial).wrap_err("Unable to get streamdeck");
                             match device {
                                 Ok(device) => {
-                                    device.streamdeck.set_button_file(key, image.as_str(), &ImageOptions::default()).expect("TODO: panic message");
+                                    device.streamdeck.lock().await.set_button_file(key, image.as_str(), &ImageOptions::default()).expect("TODO: panic message");
                                 }
                                 Err(e) => {
                                     println!("{}", e);
