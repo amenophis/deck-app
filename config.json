@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "plugins_path": "/home/jeremy/dev/github.com/amenophis/deck-app/plugins",
+    "plugins_path": "/home/jeremy/dev/github.com/amenophis/deck-app/deck-app-plugins",
     "streamdecks": {
         "AL32K2C65582": {
             "pages": [

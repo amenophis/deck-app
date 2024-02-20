@@ -41,6 +41,10 @@ pub struct Server {
 impl Server {
     pub fn new() -> Result<Self, ()>
     {
+        env_logger::builder()
+            .format_timestamp_micros()
+            .init();
+
         let config = load_config();
 
         let (tx, rx) = unbounded::<Command>();
@@ -129,6 +133,9 @@ impl Server {
                     self.connected_devices.remove(&serial);
                     let _ = self.tx.send(Command::DeviceDetached(serial.clone()));
                 }
+
+
+
             }
             Err(e) => log::error!("An error occurred in watcher loop: {}", e)
         }
@@ -238,10 +245,10 @@ impl Server {
 fn load_config() -> Config
 {
     let mut path = env::current_dir().unwrap();
-    path.push("../config.json");
+    path.push("../../config.json");
 
     let config_file = fs::read_to_string(path).expect("Should have been able to read the file");
-    let config: Config = serde_json::from_str(&*config_file).expect("Unable to parse config");
+    let config: Config = serde_json::from_str(&config_file).expect("Unable to parse config");
 
     config
 }
