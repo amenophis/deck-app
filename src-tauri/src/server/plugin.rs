@@ -2,6 +2,14 @@ use std::collections::HashMap;
 use extism::{Manifest, Wasm};
 use crate::server::Command;
 
+pub enum PluginCommand
+{
+    DeviceAttached(String),
+    DeviceDetached(String),
+    KeyPressed(String, u8),
+    KeyReleased(String, u8),
+}
+
 pub struct Plugin {
     pub id: String,
     wasm: extism::Plugin,
@@ -15,10 +23,7 @@ impl Plugin {
         let action1_script = "console.log(\"action1\")".to_string();
         let action1 = Action::new(action1_id.clone(), action1_script);
 
-        let mut path = path;
-        path.push_str("/");
-        path.push_str(id.as_str());
-        path.push_str("/dist/plugin.wasm");
+        let path = format!("{}/{}/dist/plugin.wasm", path, id);
 
         let url = Wasm::file(path);
         let manifest = Manifest::new([url]);
@@ -34,19 +39,19 @@ impl Plugin {
         }
     }
 
-    pub fn handle_command(&self, command: Command)
+    pub fn execute(&self, command: PluginCommand)
     {
         match command {
-            Command::DeviceAttached(serial) => {
+            PluginCommand::DeviceAttached(serial) => {
                 log::info!("[{:?}] DeviceAttached", serial);
             }
-            Command::DeviceDetached(serial) => {
+            PluginCommand::DeviceDetached(serial) => {
                 log::info!("[{:?}] DeviceDetached", serial);
             }
-            Command::KeyPressed(serial, key) => {
+            PluginCommand::KeyPressed(serial, key) => {
                 log::info!("[{:?}] KeyPressed - key: {}", serial, key);
             }
-            Command::KeyReleased(serial, key) => {
+            PluginCommand::KeyReleased(serial, key) => {
                 log::info!("[{:?}] KeyReleased - key: {}", serial, key);
             }
         }

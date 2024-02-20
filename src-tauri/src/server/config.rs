@@ -10,9 +10,9 @@ pub struct Config {
 
 impl Config
 {
-    pub fn get_button(&self, serial: String, page: usize, key: u8) -> Option<&Button>
+    pub fn get_button(&self, serial: &String, page: usize, key: u8) -> Option<&Button>
     {
-        let streamdeck = self.streamdecks.get(&serial).expect("Unable to get streamdeck");
+        let streamdeck = self.streamdecks.get(serial).expect("Unable to get streamdeck");
         if page > (streamdeck.pages.len() - 1) {
             return None;
         }

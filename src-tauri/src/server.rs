@@ -5,7 +5,7 @@ use ::streamdeck::StreamDeck;
 use crossbeam::channel::{Receiver, Sender, unbounded};
 use hidapi::HidApi;
 use crate::server::config::Config;
-use crate::server::plugin::Plugin;
+use crate::server::plugin::{Plugin, PluginCommand};
 
 mod plugin;
 mod config;
@@ -24,6 +24,7 @@ pub struct Device
     pub serial: String,
     pub vendor_id: u16,
     pub product_id: u16,
+    pub current_page: usize,
     pub button_states: Vec<u8>,
     pub streamdeck: StreamDeck,
 }
@@ -107,6 +108,7 @@ impl Server {
                             serial: serial.clone(),
                             vendor_id: d.vendor_id(),
                             product_id: d.product_id(),
+                            current_page: 0,
                             button_states: Vec::new(),
                             streamdeck: StreamDeck::connect(d.vendor_id(), d.product_id(), Some(serial.clone())).expect("TODO: panic message")
                         });
@@ -137,7 +139,7 @@ impl Server {
     {
         for (serial, device) in &mut self.connected_devices {
             let new_button_states = {
-                let states = device.streamdeck.read_buttons(Some(Duration::from_millis(10))).unwrap_or_else(|_| Vec::new());
+                let states = device.streamdeck.read_buttons(None).unwrap_or_else(|_| Vec::new());
                 if states.len() == 0 {
                     continue;
                 }
@@ -174,26 +176,48 @@ impl Server {
     fn handle_command(&mut self)
     {
         if let Ok(command) = self.rx.try_recv() {
-
-            for plugin in &self.plugins {
-                plugin.handle_command(command.clone());
-            }
-
             match command {
                 Command::DeviceAttached(serial) => {
-                    // let device = self.connected_devices.get(&serial).expect("TODO: panic message");
                     log::info!("[{:?}] DeviceAttached", serial);
+
+                    for plugin in &self.plugins {
+                        plugin.execute(PluginCommand::DeviceAttached(serial.clone()));
+                    }
                 }
                 Command::DeviceDetached(serial) => {
                     log::info!("[{:?}] DeviceDetached", serial);
+
+                    for plugin in &self.plugins {
+                        plugin.execute(PluginCommand::DeviceDetached(serial.clone()));
+                    }
                 }
                 Command::KeyPressed(serial, key) => {
-                    // let device = self.connected_devices.get(&serial).expect("TODO: panic message");
                     log::info!("[{:?}] KeyPressed - key: {}", serial, key);
+
+                    let device = self.connected_devices.get(&serial).expect("TODO: panic message");
+                    if let Some(button) = &self.config.get_button(&serial, device.current_page, key) {
+                        if let Some(action) = &button.press {
+                            for plugin in &self.plugins {
+                                if plugin.id == action.namespace {
+                                    plugin.execute(PluginCommand::KeyPressed(serial.clone(), key));
+                                }
+                            }
+                        }
+                    }
                 }
                 Command::KeyReleased(serial, key) => {
-                    // let device = self.connected_devices.get(&serial).expect("TODO: panic message");
                     log::info!("[{:?}] KeyReleased - key: {}", serial, key);
+
+                    let device = self.connected_devices.get(&serial).expect("TODO: panic message");
+                    if let Some(button) = &self.config.get_button(&serial, device.current_page, key) {
+                        if let Some(action) = &button.release {
+                            for plugin in &self.plugins {
+                                if plugin.id == action.namespace {
+                                    plugin.execute(PluginCommand::KeyReleased(serial.clone(), key));
+                                }
+                            }
+                        }
+                    }
                 }
                 // Command::UpdateButton(s, key, _image) => {
                 //     info!("UpdateButton {:?}", key);
