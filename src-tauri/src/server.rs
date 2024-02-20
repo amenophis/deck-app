@@ -1,175 +1,223 @@
-use hidapi::HidApi;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::{env, fs, thread};
 use std::time::Duration;
-use eyre::{Context, ContextCompat, Error};
-use streamdeck::{ImageOptions};
-use tokio::sync::{mpsc, Mutex};
-use tokio::sync::mpsc::{Receiver, Sender};
-use tauri::async_runtime::spawn;
-use tokio::time::sleep;
-use crate::device::{Device, Event};
+use ::streamdeck::StreamDeck;
+use crossbeam::channel::{Receiver, Sender, unbounded};
+use hidapi::HidApi;
+use crate::server::config::Config;
+use crate::server::plugin::Plugin;
 
-#[derive(serde::Deserialize)]
+mod plugin;
+mod config;
+
+#[derive(Clone)]
 pub enum Command
 {
-    SetButtonImage(String, u8, String),
+    DeviceAttached(String),
+    DeviceDetached(String),
+    KeyPressed(String, u8),
+    KeyReleased(String, u8),
 }
 
-unsafe impl Send for Server {}
-unsafe impl Sync for Server {}
-
-pub struct Server
+pub struct Device
 {
-    hid_api: Arc<Mutex<HidApi>>,
-    devices: Arc<Mutex<HashMap<String, Device>>>,
-    command_receiver: Arc<Mutex<Receiver<Command>>>,
-    command_sender: Arc<Mutex<Sender<Command>>>,
+    pub serial: String,
+    pub vendor_id: u16,
+    pub product_id: u16,
+    pub button_states: Vec<u8>,
+    pub streamdeck: StreamDeck,
 }
 
-impl Server
-{
-    pub fn try_new() -> Result<Self, Error>
+pub struct Server {
+    config: Config,
+    plugins: Vec<Plugin>,
+    hid_api: HidApi,
+    connected_devices: HashMap<String, Device>,
+    tx: Sender<Command>,
+    rx: Receiver<Command>,
+}
+
+impl Server {
+    pub fn new() -> Result<Self, ()>
     {
-        let hid_api = Arc::new(Mutex::new(HidApi::new()?));
-        let devices = Arc::new(Mutex::new(HashMap::<String, Device>::new()));
-        let (command_sender, command_receiver): (Sender<Command>, Receiver<Command>) = mpsc::channel(32);
+        let config = load_config();
+
+        let (tx, rx) = unbounded::<Command>();
 
         Ok(Self {
-            hid_api,
-            devices,
-            command_receiver: Arc::new(Mutex::new(command_receiver)),
-            command_sender: Arc::new(Mutex::new(command_sender)),
+            config,
+            plugins: Vec::new(),
+            hid_api: HidApi::new().unwrap(),
+            connected_devices: HashMap::new(),
+            tx,
+            rx
         })
     }
 
-    pub fn get_devices(&self) -> Arc<Mutex<HashMap<String, Device>>>
+
+    pub fn run(&mut self)
     {
-        self.devices.clone()
+        self.load_plugins();
+
+        loop {
+            self.refresh_devices();
+            self.refresh_buttons();
+            self.handle_command();
+
+            thread::sleep(Duration::from_millis(100));
+        }
     }
 
-    pub async fn execute_command(&self, c: Command) -> Result<(), Error>
+    fn load_plugins(&mut self)
     {
-        Ok(self.command_sender
-            .lock().await
-            .send(c).await?
-        )
+        let plugins_dir = fs::read_dir(self.config.plugins_path.clone()).expect("Plugin folder is missing");
+
+        for plugin_dir in plugins_dir {
+            let dir = plugin_dir.expect("");
+            if !dir.file_type().expect("").is_dir() {
+                continue;
+            }
+
+            self.plugins.push(
+                Plugin::new(
+                    self.config.plugins_path.clone(),
+                    dir.file_name().to_str().expect("").to_string()
+                )
+            );
+        }
     }
 
-    pub fn start(&mut self)
+    fn refresh_devices(&mut self)
     {
-        self.streamdeck_watcher();
-        self.command_handler();
-    }
-
-    fn streamdeck_watcher(&mut self) {
-        let hid_api = self.hid_api.clone();
-        let devices = self.devices.clone();
-
-        // Streamdecks Watcher
-        spawn(async move {
-            loop {
+        match self.hid_api.refresh_devices() {
+            Ok(_) => {
                 let mut attached_serials = Vec::new();
 
-                // Look for new streamdecks
-                {
-                    let mut hid_api = hid_api.lock().await;
-                    let loaded = hid_api.refresh_devices().wrap_err("Unable to refresh devices");
-                    match loaded {
-                        Ok(_) => {
-                            let attached_streamdecks = hid_api.device_list()
-                                .filter(|streamdeck| streamdeck.vendor_id() == 0x0FD9);
+                // Adding not existing devices
+                for d in self.hid_api.device_list() {
+                    if d.vendor_id() != 0x0FD9 {
+                        continue;
+                    }
 
-                            for streamdeck in attached_streamdecks {
-                                let serial = streamdeck.serial_number().wrap_err("Unable to get streamdeck serial number");
-                                match serial {
-                                    Ok(serial) => {
-                                        let serial = serial.to_string();
-                                        let mut device_list = devices.lock().await;
+                    let serial = d.serial_number().unwrap().to_string();
+                    attached_serials.push(serial.clone());
 
-                                        attached_serials.push(serial.clone());
+                    if !self.connected_devices.contains_key(&serial) {
+                        self.connected_devices.insert(serial.clone(), Device {
+                            serial: serial.clone(),
+                            vendor_id: d.vendor_id(),
+                            product_id: d.product_id(),
+                            button_states: Vec::new(),
+                            streamdeck: StreamDeck::connect(d.vendor_id(), d.product_id(), Some(serial.clone())).expect("TODO: panic message")
+                        });
 
-                                        if let None = device_list.get(&serial) {
-                                            match Device::try_new(&hid_api, streamdeck.vendor_id(), streamdeck.product_id(), serial.clone()) {
-                                                Ok(device) => {
-                                                    device.start_button_watcher(|event| {
-                                                        match event {
-                                                            Event::KeyPressed(key) => {
-                                                                println!("[Server] KeyPressed {key}");
-                                                            }
-                                                            Event::KeyReleased(key) => {
-                                                                println!("[Server] KeyReleased {key}");
-                                                            }
-                                                        }
-                                                    });
-
-                                                    device_list.insert(serial.clone(), device);
-                                                    println!("Attached {}", serial);
-                                                    // TODO: Dispatch attached event
-                                                },
-                                                Err(e) => println!("Unable to attach streamdeck with serial {}: {}", serial, e)
-                                            }
-                                        }
-                                    }
-                                    Err(e) => println!("{}", e)
-                                }
-                            };
-                        }
-                        Err(e) =>  println!("{}", e)
+                        let _ = self.tx.send(Command::DeviceAttached(serial.clone()));
                     }
                 }
 
-                // Look for suspended streamdecks
-                // TODO later
+                let mut devices_to_remove = Vec::new();
 
-                {
-                    let mut devices = devices.lock().await;
-
-                    // Remove unplugged streamdecks
-                    let mut to_remove = Vec::new(); // TODO: Search how to optimize without an extra Vec ?
-                    for serial in devices.keys() {
-                        if !attached_serials.contains(&serial) {
-                            to_remove.push(serial.clone());
-                        }
-                    }
-                    for serial in to_remove {
-                        devices.remove(&serial);
-
-                        println!("Detached {}", serial);
-                        // TODO: Dispatch attached event
+                for serial in self.connected_devices.keys() {
+                    if !&attached_serials.contains(serial) {
+                        devices_to_remove.push(serial.clone());
                     }
                 }
 
-                sleep(Duration::from_secs(1)).await;
+                for serial in devices_to_remove {
+                    self.connected_devices.remove(&serial);
+                    let _ = self.tx.send(Command::DeviceDetached(serial.clone()));
+                }
             }
-        });
+            Err(e) => log::error!("An error occurred in watcher loop: {}", e)
+        }
     }
 
-    fn command_handler(&mut self)
+
+    fn refresh_buttons(&mut self)
     {
-        let command_receiver = self.command_receiver.clone();
-        let devices = self.devices.clone();
-
-        spawn(async move {
-            loop {
-                while let Some(command) = command_receiver.lock().await.recv().await {
-                    match command {
-                        Command::SetButtonImage(serial, key, image) => {
-                            let mut handles = devices.lock().await;
-                            let device = handles.get_mut(&serial).wrap_err("Unable to get streamdeck");
-                            match device {
-                                Ok(device) => {
-                                    device.streamdeck.lock().await.set_button_file(key, image.as_str(), &ImageOptions::default()).expect("TODO: panic message");
-                                }
-                                Err(e) => {
-                                    println!("{}", e);
-                                }
-                            }
-                        }
-                    }
+        for (serial, device) in &mut self.connected_devices {
+            let new_button_states = {
+                let states = device.streamdeck.read_buttons(Some(Duration::from_millis(10))).unwrap_or_else(|_| Vec::new());
+                if states.len() == 0 {
+                    continue;
                 }
+
+                states
+            };
+
+            let mut key = 0;
+
+            for new_button_state in new_button_states {
+                let current_button_state: u8 = match device.button_states.get(key) {
+                    None => {
+                        let initial_value = 0;
+                        device.button_states.push(initial_value);
+
+                        initial_value
+                    },
+                    Some(state) => *state
+                };
+
+                match (new_button_state, current_button_state) {
+                    (1, 0) => self.tx.send(Command::KeyPressed(serial.clone(), key as u8)).expect("TODO: panic message"),
+                    (0, 1) => self.tx.send(Command::KeyReleased(serial.clone(), key as u8)).expect("TODO: panic message"),
+                    _ => ()
+                };
+
+                device.button_states[key] = new_button_state;
+
+                key = key + 1;
+            }
+        }
+    }
+
+    fn handle_command(&mut self)
+    {
+        if let Ok(command) = self.rx.try_recv() {
+
+            for plugin in &self.plugins {
+                plugin.handle_command(command.clone());
             }
 
-        });
+            match command {
+                Command::DeviceAttached(serial) => {
+                    // let device = self.connected_devices.get(&serial).expect("TODO: panic message");
+                    log::info!("[{:?}] DeviceAttached", serial);
+                }
+                Command::DeviceDetached(serial) => {
+                    log::info!("[{:?}] DeviceDetached", serial);
+                }
+                Command::KeyPressed(serial, key) => {
+                    // let device = self.connected_devices.get(&serial).expect("TODO: panic message");
+                    log::info!("[{:?}] KeyPressed - key: {}", serial, key);
+                }
+                Command::KeyReleased(serial, key) => {
+                    // let device = self.connected_devices.get(&serial).expect("TODO: panic message");
+                    log::info!("[{:?}] KeyReleased - key: {}", serial, key);
+                }
+                // Command::UpdateButton(s, key, _image) => {
+                //     info!("UpdateButton {:?}", key);
+                //
+                //     let mut path = env::current_dir().unwrap();
+                //     path.push("../power.png");
+                //
+                //     let streamdeck_arc = connected_streamdecks.get_mut(&s.serial.clone()).expect("TODO: panic message");
+                //     let mut streamdeck = streamdeck_arc.lock().await;
+                //
+                //     streamdeck.set_button_file(key, path.display().to_string().as_str(), &ImageOptions::default()).expect("TODO: panic message");
+                // }
+            }
+        }
     }
+}
+
+fn load_config() -> Config
+{
+    let mut path = env::current_dir().unwrap();
+    path.push("../config.json");
+
+    let config_file = fs::read_to_string(path).expect("Should have been able to read the file");
+    let config: Config = serde_json::from_str(&*config_file).expect("Unable to parse config");
+
+    config
 }

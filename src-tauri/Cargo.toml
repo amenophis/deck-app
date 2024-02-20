@@ -7,6 +7,8 @@ license = ""
 repository = ""
 edition = "2021"
 
+[workspace]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
@@ -15,13 +17,19 @@ tauri-build = { version = "1.5", features = [] }
 [dependencies]
 tauri = { version = "1.5", features = ["shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.101"
+serde_json = "1.0.113"
 streamdeck = { version = "0.8.0", features = ["default"] }
-hidapi = "2.4"
+hidapi = "2.5.1"
 tokio = { version = "1.35.1", features = ["full"] }
-eyre = "0.6.11"
+eyre = "0.6.12"
+#deno_core = "0.255.0"
+log = "0.4.20"
+env_logger = "0.11.1"
+extism = "1.0.3"
+crossbeam = "0.8.4"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+

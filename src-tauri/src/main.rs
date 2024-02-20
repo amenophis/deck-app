@@ -2,32 +2,24 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 extern crate hidapi;
 
-pub mod commands;
-mod server;
-mod device;
+use crate::server::Server;
 
-use tauri::Manager;
-use server::Server;
+mod server;
+mod commands;
+// use tauri::Manager;
 
 fn main() {
+    env_logger::builder()
+        .format_timestamp_micros()
+        .init();
+
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![commands::get_decks, commands::set_button_image])
-        .setup(move |app| {
-            #[cfg(debug_assertions)] // only include this code on debug builds
-            {
-                let window = app.get_window("main").unwrap();
-                window.open_devtools();
-            }
-
-            let server = Server::try_new();
-            match server {
-                Ok(mut server) => {
-                    server.start();
-                    app.manage(server);
-                }
-                Err(e) => println!("Unable to start server: {}", e)
-            }
-
+        // .invoke_handler(tauri::generate_handler![commands::get_decks, commands::set_button_image])
+        .setup(move |_| {
+            tauri::async_runtime::spawn(async move {
+                let mut server = Server::new().unwrap();
+                server.run();
+            });
             Ok(())
         })
         .run(tauri::generate_context!())
