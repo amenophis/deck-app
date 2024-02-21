@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = [
+    "deck-app-server",
+    "deck-app-ui/src-tauri"
+]

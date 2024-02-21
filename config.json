@@ -1,0 +1,39 @@
+{
+    "version": 1,
+    "plugins_path": "/home/jeremy/dev/github.com/amenophis/deck-app/deck-app-plugins",
+    "streamdecks": {
+        "AL32K2C65582": {
+            "pages": [
+                {
+                    "buttons": [
+                        {
+                            "key": 0,
+                            "press": {
+                                "namespace": "com.amenophis.deckapp.sample",
+                                "id": "action1"
+                            }
+                        },
+                        {
+                            "key": 1,
+                            "release": {
+                                "namespace": "com.amenophis.deckapp.sample",
+                                "id": "action1"
+                            }
+                        },
+                        {
+                            "key": 2,
+                            "press": {
+                                "namespace": "com.amenophis.deckapp.sample",
+                                "id": "action1"
+                            },
+                            "release": {
+                                "namespace": "com.amenophis.deckapp.sample",
+                                "id": "action1"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
