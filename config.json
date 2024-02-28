@@ -1,6 +1,5 @@
 {
     "version": 1,
-    "plugins_path": "/home/jeremy/dev/github.com/amenophis/deck-app/deck-app-plugins",
     "streamdecks": {
         "AL32K2C65582": {
             "pages": [
@@ -9,26 +8,35 @@
                         {
                             "key": 0,
                             "press": {
-                                "namespace": "com.amenophis.deckapp.sample",
-                                "id": "action1"
+                                "plugin": "keyboard",
+                                "action": "type",
+                                "config": {
+                                    "text": "Hello , World! \uD83D\uDC4B"
+                                }
                             }
                         },
                         {
-                            "key": 1,
-                            "release": {
-                                "namespace": "com.amenophis.deckapp.sample",
-                                "id": "action1"
-                            }
-                        },
-                        {
-                            "key": 2,
+                            "key": 14,
                             "press": {
-                                "namespace": "com.amenophis.deckapp.sample",
-                                "id": "action1"
-                            },
-                            "release": {
-                                "namespace": "com.amenophis.deckapp.sample",
-                                "id": "action1"
+                                "plugin": "core",
+                                "action": "set_page",
+                                "config": {
+                                    "page": "2"
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "buttons": [
+                        {
+                            "key": 14,
+                            "press": {
+                                "plugin": "core",
+                                "action": "set_page",
+                                "config": {
+                                    "page": "1"
+                                }
                             }
                         }
                     ]

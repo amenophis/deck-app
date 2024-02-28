@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "deck-app-ui/node_modules/.bin/vite",
-    "build": "deck-app-ui/node_modules/.bin/tsc && vite build",
-    "preview": "deck-app-ui/node_modules/.bin/vite preview",
-    "tauri": "deck-app-ui/node_modules/.bin/tauri"
+    "dev": "node_modules/.bin/vite",
+    "build": "node_modules/.bin/tsc && vite build",
+    "preview": "node_modules/.bin/vite preview",
+    "tauri": "node_modules/.bin/tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^1.5.2",

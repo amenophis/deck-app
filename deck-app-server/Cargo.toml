@@ -10,11 +10,16 @@ edition = "2021"
 [dependencies]
 streamdeck = { version = "0.8.0", features = ["default"] }
 hidapi = "2.5.1"
-tokio = { version = "1.35.1", features = ["full"] }
-eyre = "0.6.12"
 log = "0.4.20"
-env_logger = "0.11.1"
-extism = "1.0.3"
 crossbeam = "0.8.4"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.114"
+
+# Plugin SDK
+deck-app-plugin-sdk = { path = "../deck-app-plugin-sdk" }
+
+# Plugins
+core-plugin = { path = "../deck-app-plugins/core-plugin" }
+keyboard-plugin = { path = "../deck-app-plugins/keyboard-plugin" }
+rusttype = "0.9.3"
+#obs-plugin = { path = "../deck-app-plugins/obs-plugin" }

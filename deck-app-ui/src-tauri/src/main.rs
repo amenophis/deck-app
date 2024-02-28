@@ -7,6 +7,10 @@ fn main() {
     tauri::Builder::default()
         // .invoke_handler(tauri::generate_handler![commands::get_decks, commands::set_button_image])
         .setup(move |_| {
+            env_logger::builder()
+                .format_timestamp_micros()
+                .init();
+
             tauri::async_runtime::spawn(async move {
                 let mut server = Server::new().unwrap();
                 server.run();

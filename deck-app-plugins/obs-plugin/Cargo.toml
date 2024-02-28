@@ -1,0 +1,11 @@
+[package]
+name = "obs-plugin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+deck-app-plugin-sdk = { path = "../../deck-app-plugin-sdk"}
+log = { version = "0.4.20", features = [] }
+obws = { version = "0.11.5", features = ["events"] }

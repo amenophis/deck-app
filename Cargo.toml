@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
+members = [ "deck-app-plugin-sdk","deck-app-plugins/keyboard-plugin",
     "deck-app-server",
     "deck-app-ui/src-tauri"
 ]
